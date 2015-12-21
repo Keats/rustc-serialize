@@ -24,7 +24,9 @@ pub enum CharacterSet {
     /// The standard character set (uses `+` and `/`)
     Standard,
     /// The URL safe character set (uses `-` and `_`)
-    UrlSafe
+    UrlSafe,
+    /// The bcrypt character set (users `.` and `/`)
+    Bcrypt
 }
 
 /// Available newline types
@@ -61,6 +63,10 @@ pub static URL_SAFE: Config =
 pub static MIME: Config =
     Config {char_set: Standard, newline: Newline::CRLF, pad: true, line_length: Some(76)};
 
+/// Configuration for Bcrypt base64 encoding
+pub static BCRYPT: Config =
+    Config {char_set: Bcrypt, newline: Newline::CRLF, pad: false, line_length: None};
+
 static STANDARD_CHARS: &'static[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
                                         abcdefghijklmnopqrstuvwxyz\
                                         0123456789+/";
@@ -68,6 +74,10 @@ static STANDARD_CHARS: &'static[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
 static URLSAFE_CHARS: &'static[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
                                        abcdefghijklmnopqrstuvwxyz\
                                        0123456789-_";
+
+static BCRYPT_CHARS: &'static[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ\
+                                       abcdefghijklmnopqrstuvwxyz\
+                                       0123456789./";
 
 /// A trait for converting a value to base64 encoding.
 pub trait ToBase64 {
@@ -93,7 +103,8 @@ impl ToBase64 for [u8] {
     fn to_base64(&self, config: Config) -> String {
         let bytes = match config.char_set {
             Standard => STANDARD_CHARS,
-            UrlSafe => URLSAFE_CHARS
+            UrlSafe => URLSAFE_CHARS,
+            Bcrypt => BCRYPT_CHARS
         };
 
         let len = self.len();
@@ -322,7 +333,7 @@ impl FromBase64 for [u8] {
 ///             b'A'...b'Z' => ch - 0x41,
 ///             b'a'...b'z' => ch - 0x47,
 ///             b'0'...b'9' => ch + 0x04,
-///             b'+' | b'-' => 0x3E,
+///             b'+' | b'-' | b'.' => 0x3E,
 ///             b'/' | b'_' => 0x3F,
 ///             b'=' => 0xFE,
 ///             b'\r' | b'\n' => 0xFD,
@@ -339,7 +350,7 @@ impl FromBase64 for [u8] {
 const DECODE_TABLE: [u8; 256] = [
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFD, 0xFF, 0xFF, 0xFD, 0xFF, 0xFF,
     0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3E, 0xFF, 0x3E, 0xFF, 0x3F,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x3E, 0xFF, 0x3E, 0x3E, 0x3F,
     0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3A, 0x3B, 0x3C, 0x3D, 0xFF, 0xFF, 0xFF, 0xFE, 0xFF, 0xFF,
     0xFF, 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
     0x0F, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18, 0x19, 0xFF, 0xFF, 0xFF, 0xFF, 0x3F,
@@ -361,7 +372,7 @@ const SPECIAL_CODES_START: u8 = NEWLINE_CODE;
 
 #[cfg(test)]
 mod tests {
-    use base64::{Config, Newline, FromBase64, ToBase64, STANDARD, URL_SAFE};
+    use base64::{Config, Newline, FromBase64, ToBase64, STANDARD, URL_SAFE, BCRYPT};
 
     #[test]
     fn test_to_base64_basic() {
@@ -405,6 +416,7 @@ mod tests {
     fn test_to_base64_url_safe() {
         assert_eq!([251, 255].to_base64(URL_SAFE), "-_8");
         assert_eq!([251, 255].to_base64(STANDARD), "+/8=");
+        assert_eq!([251, 255].to_base64(BCRYPT), "./8");
     }
 
     #[test]
@@ -438,6 +450,11 @@ mod tests {
     #[test]
     fn test_from_base64_urlsafe() {
         assert_eq!("-_8".from_base64().unwrap(), "+/8=".from_base64().unwrap());
+    }
+
+    #[test]
+    fn test_from_base64_brypt() {
+        assert_eq!("./8".from_base64().unwrap(), "+/8=".from_base64().unwrap());
     }
 
     #[test]
